@@ -1,0 +1,14 @@
+# torch==2.5.1+cu121
+# torchvision==0.20.1+cu121
+# torchaudio==2.5.1+cu121
+# --extra-index-url https://download.pytorch.org/whl/cu121
+
+ultralytics
+ipykernel
+fastapi 
+uvicorn[standard]
+websockets
+python-multipart
+opencv-python
+
+psycopg2-binary==2.9.9

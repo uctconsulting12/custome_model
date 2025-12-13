@@ -1,12 +1,10 @@
 custome_venv
-dataset
 helmet-vest-and-boots-detection-8
 
 jobs
 number.v1i.yolov11
 
 research
-runs
 uploads
 main
 yolov5su.pt

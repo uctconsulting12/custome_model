@@ -42,7 +42,7 @@ jobs:
             --name custome_container \
             --gpus all \
             --shm-size=8g \
-            -p 9002:9002 \
+            -p 8005:8005 \
             -v /home/ubuntu/.aws:/root/.aws \
             -v /home/ubuntu/custome_model_training/dataset:/app/dataset \
             -v /home/ubuntu/custome_model_training/runs:/app/runs \

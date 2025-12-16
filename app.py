@@ -126,7 +126,7 @@ class TrainRequest(BaseModel):
     # device can be: 0, "0", "0,1", [0,1]
     device: Union[int, str, List[int]] = Field(default="0")
 
-    batch: int = Field(default=16)
+    batch: int = Field(default=8)
     lr: float = Field(default=0.001)
     
 

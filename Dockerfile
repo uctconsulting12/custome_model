@@ -21,9 +21,9 @@ RUN pip install --upgrade pip \
 COPY . .
 
 # Expose port and run
-EXPOSE 8005
+EXPOSE 8006
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8005"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8006"]
 
 
 # docker run --gpus all --shm-size=8g -d -p 9005:8006  -v "$USERPROFILE/.aws:/root/.aws"  -v "E:/All_models/custome_model_training/dataset:/app/dataset" -v "E:/All_models/custome_model_training/runs:/app/runs"   --name custome_container   custome_image

@@ -2,7 +2,7 @@
 from ultralytics import YOLO
 
 # ---------- YOLO Train Function ----------
-def train_yolo_model(config):
+async def train_yolo_model(config):
     print(f"\n🚀 Starting YOLO Training with Config:\n{config}\n")
 
     # Load model

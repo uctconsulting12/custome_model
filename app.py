@@ -170,9 +170,9 @@ def format_results(results):
 
 # ------------- API Endpoint ----------------
 @app.post("/train")
-def start_training(request: TrainRequest):
+async def start_training(request: TrainRequest):
     try:
-        results = train_yolo_model(request)
+        results = await train_yolo_model(request)
         format_result=format_results(results)
         model_weight=format_result["weights_path"]["best"]
         data={

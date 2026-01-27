@@ -4,11 +4,14 @@ TRAIN_RATIO = 0.8
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
-from fastapi import FastAPI,UploadFile, File,Form,Request
+from fastapi import FastAPI,UploadFile, File,Form,Request,HTTPException
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import torch
+import subprocess
+import threading
+from fastapi.staticfiles import StaticFiles
 
 from typing import Optional, Dict, Any, List, Union
 
@@ -32,6 +35,15 @@ from src.database import insert_model_details,get_models_by_org_user
 
 
 app = FastAPI(title="YOLO Training API")
+
+HLS_ROOT = "hls_out"
+os.makedirs(HLS_ROOT, exist_ok=True)
+
+# Serve HLS output
+app.mount("/hls", StaticFiles(directory=HLS_ROOT), name="hls")
+
+# Keep track of streams
+streams = {} 
 
 
 app.add_middleware(
@@ -268,9 +280,7 @@ def get_model(weights_path):
     return model_cache[weights_path]
 
 
-# ----------------------------------------------------
-# YOLO Streaming Endpoint (NDJSON)
-# ----------------------------------------------------
+
 @app.post("/stream_yolo")
 async def stream_yolo(req: StreamRequest):
 
@@ -335,3 +345,157 @@ async def stream_yolo(req: StreamRequest):
             await asyncio.sleep(0)
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+
+
+
+
+HLS_ROOT = "hls_out"
+os.makedirs(HLS_ROOT, exist_ok=True)
+
+# Serve HLS folders
+app.mount("/hls", StaticFiles(directory=HLS_ROOT), name="hls")
+
+# Load YOLO once (GPU will be used if available)
+model = YOLO("yolov8n.pt")
+
+# Keep track of running streams
+streams = {}  # stream_id -&gt; {"thread":..., "stop": threading.Event(), "proc":..., "out_dir":...}
+
+class StartRequest(BaseModel):
+    source: str              # RTSP URL or file path
+    use_nvenc: bool = True
+
+
+class StartRequest(BaseModel):
+    source: str          # RTSP / file / HTTP stream
+    weights_path: str
+    camera_id: str
+    user_id: str
+    org_id: str
+    use_nvenc: bool = False
+
+
+def stream_worker(
+    stream_id: str,
+    req: StartRequest,
+    stop_event: threading.Event
+):
+    out_dir = os.path.join(HLS_ROOT, stream_id)
+    os.makedirs(out_dir, exist_ok=True)
+    out_m3u8 = os.path.join(out_dir, "stream.m3u8")
+
+    model = YOLO(req.weights_path)
+
+    cap = cv2.VideoCapture(req.source)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    if not cap.isOpened():
+        return
+
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    gop = int(fps * 2)
+
+    vcodec = "h264_nvenc" if req.use_nvenc else "libx264"
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-pix_fmt", "bgr24",
+        "-s", f"{w}x{h}",
+        "-r", str(fps),
+        "-i", "-",
+
+        "-c:v", vcodec,
+        "-preset", "veryfast",
+        "-pix_fmt", "yuv420p",
+        "-g", str(gop),
+        "-keyint_min", str(gop),
+        "-sc_threshold", "0",
+
+        "-f", "hls",
+        "-hls_time", "4",
+        "-hls_list_size", "10",
+        "-hls_flags", "delete_segments+append_list",
+        out_m3u8
+    ]
+
+    proc = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
+    streams[stream_id]["proc"] = proc
+
+    try:
+        while not stop_event.is_set():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            results = model(frame, verbose=False)
+            annotated = results[0].plot()
+
+            proc.stdin.write(annotated.tobytes())
+
+    except BrokenPipeError:
+        pass
+    finally:
+        cap.release()
+        try:
+            proc.stdin.close()
+            proc.terminate()
+        except Exception:
+            pass
+
+
+
+@app.post("/streams/start")
+def start_stream(req: StartRequest):
+    stream_id = str(uuid.uuid4())
+    stop_event = threading.Event()
+
+    streams[stream_id] = {
+        "stop": stop_event,
+        "thread": None,
+        "proc": None
+    }
+
+    t = threading.Thread(
+        target=stream_worker,
+        args=(stream_id, req, stop_event),
+        daemon=True
+    )
+    streams[stream_id]["thread"] = t
+    t.start()
+
+    return {
+        "stream_id": stream_id,
+        "camera_id": req.camera_id,
+        "user_id": req.user_id,
+        "org_id": req.org_id,
+        "hls_url": f"/hls/{stream_id}/stream.m3u8"
+    }
+
+
+
+@app.post("/streams/stop/{stream_id}")
+def stop_stream(stream_id: str):
+    if stream_id not in streams:
+        raise HTTPException(status_code=404, detail="stream not found")
+
+    streams[stream_id]["stop"].set()
+
+    proc = streams[stream_id].get("proc")
+    if proc:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+
+    dir_path = os.path.join(HLS_ROOT, stream_id)
+    if os.path.exists(dir_path):
+        shutil.rmtree(dir_path, ignore_errors=True)
+
+    streams.pop(stream_id, None)
+
+    return {"status": "stopped", "stream_id": stream_id}

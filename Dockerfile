@@ -3,6 +3,7 @@ FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 
 # Install OpenCV and system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
@@ -26,4 +27,4 @@ EXPOSE 8006
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8006"]
 
 
-# docker run --gpus all --shm-size=8g -d -p 9005:8006  -v "$USERPROFILE/.aws:/root/.aws"  -v "E:/All_models/custome_model_training/dataset:/app/dataset" -v "E:/All_models/custome_model_training/runs:/app/runs"   --name custome_container   custome_image
+# docker run --gpus all --shm-size=8g -d -p 8006:8006  -v "$USERPROFILE/.aws:/root/.aws"  -v "E:/All_models/custome_model_training/dataset:/app/dataset" -v "E:/All_models/custome_model_training/runs:/app/runs"   --name custome_container   custome_image

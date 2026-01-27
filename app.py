@@ -2,6 +2,7 @@ from src.model import train_yolo_model
 from src.file import unzip_and_locate,parse_classes,create_yaml
 TRAIN_RATIO = 0.8
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+import time
 
 
 from fastapi import FastAPI,UploadFile, File,Form,Request,HTTPException
@@ -467,6 +468,8 @@ def start_stream(req: StartRequest):
     )
     streams[stream_id]["thread"] = t
     t.start()
+
+    time.sleep(15)
 
     return {
         "stream_id": stream_id,

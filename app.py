@@ -481,24 +481,24 @@ def start_stream(req: StartRequest):
 
 
 
-@app.post("/streams/stop/{stream_id}")
-def stop_stream(stream_id: str):
-    if stream_id not in streams:
+@app.post("/streams/stop/{streamId}")
+def stop_stream(streamId: str):
+    if streamId not in streams:
         raise HTTPException(status_code=404, detail="stream not found")
 
-    streams[stream_id]["stop"].set()
+    streams[streamId]["stop"].set()
 
-    proc = streams[stream_id].get("proc")
+    proc = streams[streamId].get("proc")
     if proc:
         try:
             proc.terminate()
         except Exception:
             pass
 
-    dir_path = os.path.join(HLS_ROOT, stream_id)
+    dir_path = os.path.join(HLS_ROOT, streamId)
     if os.path.exists(dir_path):
         shutil.rmtree(dir_path, ignore_errors=True)
 
-    streams.pop(stream_id, None)
+    streams.pop(streamId, None)
 
-    return {"status": "stopped", "stream_id": stream_id}
+    return {"status": "stopped", "stream_id": streamId}
